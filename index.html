@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Interactive Flood Fill with Draggable Color Board</title>
   <style>
@@ -13,7 +13,7 @@
       margin: 0;
       padding: 20px;
       text-align: center;
-      overflow: hidden;
+      overflow: auto;
     }
     .container {
       max-width: 900px;
@@ -39,6 +39,16 @@
     .controls {
       margin-top: 20px;
     }
+    .controls label {
+      font-weight: bold;
+    }
+    .controls input[type="color"] {
+      width: 40px;
+      height: 40px;
+      border: none;
+      cursor: pointer;
+      vertical-align: middle;
+    }
     .btn {
       margin: 10px 5px 0 5px;
       padding: 10px 20px;
@@ -60,40 +70,52 @@
       position: absolute;
       top: 20px;
       right: 20px;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 10px;
+      width: 220px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 15px;
       border: 2px solid #FFC107;
       border-radius: 10px;
       z-index: 1000;
-      cursor: move;
+      /* Initially fixed (not draggable) */
+      cursor: default;
+    }
+    #colorBoard .drag-toggle {
+      background: #4A4A4A;
+      border: 1px solid #FFC107;
+      border-radius: 5px;
+      padding: 5px;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+      cursor: pointer;
       user-select: none;
     }
-    #colorBoard .color-box {
+    #currentColorContainer {
       margin-bottom: 10px;
     }
     #currentColorDisplay {
       display: inline-block;
-      width: 40px;
-      height: 40px;
-      border: 3px solid #fff;
-      border-radius: 5px;
+      width: 60px;
+      height: 60px;
+      border: 4px solid #fff;
+      border-radius: 8px;
       vertical-align: middle;
     }
-    .recent-colors {
+    #currentLabel {
+      display: block;
       margin-top: 5px;
+      font-size: 0.9rem;
+    }
+    .recent-colors {
+      margin-top: 10px;
     }
     .recent-colors span {
       display: inline-block;
-      width: 40px;
-      height: 40px;
+      width: 50px;
+      height: 50px;
       margin: 0 5px;
       border: 2px solid #fff;
-      border-radius: 5px;
+      border-radius: 8px;
       cursor: pointer;
-    }
-    /* Hide overflow if board goes off-screen (you can adjust as needed) */
-    html, body {
-      overflow: auto;
     }
   </style>
 </head>
@@ -101,18 +123,22 @@
   <div class="container">
     <h1>Interactive Flood Fill for Cat Regions</h1>
     <canvas id="canvas"></canvas>
-    
     <div class="controls">
+      <label for="colorPicker">Choose Fill Color:</label>
+      <input type="color" id="colorPicker" value="#FF0000">
+      <br>
       <button id="downloadBtn" class="btn">Download / Share</button>
       <button id="backBtn" class="btn">Back to Homepage</button>
     </div>
+    <p>Tap on a region (avoid blue boundaries) to fill it with the selected color.</p>
   </div>
   
   <!-- Draggable Color Board -->
   <div id="colorBoard">
-    <div class="color-box">
-      <span id="currentColorDisplay"></span>
-      <div style="font-size:0.8rem; margin-top:5px;">Current</div>
+    <div id="dragToggle" class="drag-toggle">Enable Drag</div>
+    <div id="currentColorContainer">
+      <div id="currentColorDisplay"></div>
+      <div id="currentLabel">Current</div>
     </div>
     <div class="recent-colors" id="recentColorsBoard">
       <!-- Recent colors will appear here -->
@@ -123,31 +149,38 @@
     /***************** Global Variables and Settings *****************/
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    // High quality image smoothing:
     ctx.imageSmoothingEnabled = true;
     if (ctx.imageSmoothingQuality) {
       ctx.imageSmoothingQuality = "high";
     }
     
+    const colorPicker = document.getElementById('colorPicker');
     const downloadBtn = document.getElementById('downloadBtn');
     const backBtn = document.getElementById('backBtn');
     
-    // Color board elements
     const colorBoard = document.getElementById('colorBoard');
+    const dragToggle = document.getElementById('dragToggle');
     const currentColorDisplay = document.getElementById('currentColorDisplay');
     const recentColorsBoard = document.getElementById('recentColorsBoard');
     
-    // Default current color
-    let currentColor = "#FF0000"; // initial color
-    // Array to store last five used colors
+    let currentColor = colorPicker.value;
     let recentColors = [];
+    let dragEnabled = false;
     
-    // Update the current color display (highlighted)
+    // Update the current color display
     function updateCurrentColorDisplay() {
       currentColorDisplay.style.backgroundColor = currentColor;
     }
+    updateCurrentColorDisplay();
     
-    // Update the recent colors board UI
+    // Update recent colors list and render them
+    function updateRecentColors(newColor) {
+      if (recentColors.length && recentColors[recentColors.length - 1] === newColor) return;
+      recentColors = recentColors.filter(c => c !== newColor);
+      recentColors.push(newColor);
+      if (recentColors.length > 5) recentColors.shift();
+      renderRecentColors();
+    }
     function renderRecentColors() {
       recentColorsBoard.innerHTML = "";
       recentColors.slice().reverse().forEach(color => {
@@ -155,32 +188,24 @@
         span.style.backgroundColor = color;
         span.addEventListener('click', () => {
           currentColor = color;
+          colorPicker.value = color;
           updateCurrentColorDisplay();
         });
         recentColorsBoard.appendChild(span);
       });
     }
     
-    // Add a color to recent colors (keeping max 5)
-    function addRecentColor(color) {
-      // Do not add duplicate if already the last one
-      if (recentColors.length && recentColors[recentColors.length - 1] === color) return;
-      recentColors = recentColors.filter(c => c !== color);
-      recentColors.push(color);
-      if (recentColors.length > 5) {
-        recentColors.shift();
-      }
-      renderRecentColors();
-    }
-    
-    updateCurrentColorDisplay();
+    // When color picker changes, update currentColor
+    colorPicker.addEventListener('input', () => {
+      currentColor = colorPicker.value;
+      updateCurrentColorDisplay();
+    });
     
     /***************** Image Loading *****************/
     const img = new Image();
     img.crossOrigin = "Anonymous";
     img.src = "own.jpeg";
     img.onload = function() {
-      // Set canvas dimensions to image natural size for best quality
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
       ctx.drawImage(img, 0, 0);
@@ -208,7 +233,6 @@
              Math.abs(c1.b - c2.b) <= tolerance;
     }
     
-    // Check if a color is a blue boundary (we assume blue: low R & G, high B)
     function isBoundary(color) {
       return (color.r < 50 && color.g < 50 && color.b > 200);
     }
@@ -249,7 +273,6 @@
       return { r, g, b, a: 255 };
     }
     
-    // Canvas click event to perform flood fill
     canvas.addEventListener('click', function(e) {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
@@ -257,10 +280,10 @@
       const x = Math.floor((e.clientX - rect.left) * scaleX);
       const y = Math.floor((e.clientY - rect.top) * scaleY);
       floodFill(x, y, currentColor);
-      addRecentColor(currentColor);
+      updateRecentColors(currentColor);
     });
     
-    /***************** Unified Download/Share Function *****************/
+    /***************** Download/Share Function *****************/
     function downloadImage() {
       canvas.toBlob(blob => {
         const file = new File([blob], 'colored_cat.png', { type: blob.type });
@@ -287,55 +310,58 @@
     
     /***************** Back to Homepage Button *****************/
     backBtn.addEventListener('click', () => {
-      // Change "index.html" to your homepage URL if needed.
+      // Replace "index.html" with your homepage URL if needed.
       window.location.href = "index.html";
     });
     
-    /***************** Draggable Color Board Implementation *****************/
-    // The color board is defined in the HTML with id "colorBoard". We make it draggable.
-    function makeDraggable(el) {
-      let isMouseDown = false;
-      let offsetX = 0, offsetY = 0;
+    /***************** Draggable Color Board with Toggle *****************/
+    let dragEnabled = false;
+    let offsetX = 0, offsetY = 0;
     
-      el.addEventListener('mousedown', function(e) {
-        isMouseDown = true;
-        offsetX = e.clientX - el.offsetLeft;
-        offsetY = e.clientY - el.offsetTop;
-        el.style.cursor = 'grabbing';
-      });
+    // Toggle drag function – called when dragToggle is clicked.
+    dragToggle.addEventListener('click', () => {
+      dragEnabled = !dragEnabled;
+      dragToggle.textContent = dragEnabled ? "Disable Drag" : "Enable Drag";
+      // Change cursor accordingly.
+      colorBoard.style.cursor = dragEnabled ? "move" : "default";
+    });
     
-      document.addEventListener('mousemove', function(e) {
-        if (!isMouseDown) return;
-        el.style.left = (e.clientX - offsetX) + 'px';
-        el.style.top = (e.clientY - offsetY) + 'px';
-      });
+    // Handle mouse events for dragging only if dragEnabled is true.
+    colorBoard.addEventListener('mousedown', (e) => {
+      if (!dragEnabled) return;
+      offsetX = e.clientX - colorBoard.offsetLeft;
+      offsetY = e.clientY - colorBoard.offsetTop;
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragEnabled) return;
+      colorBoard.style.left = (e.clientX - offsetX) + 'px';
+      colorBoard.style.top = (e.clientY - offsetY) + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+      // Nothing to do here
+    });
     
-      document.addEventListener('mouseup', function() {
-        isMouseDown = false;
-        el.style.cursor = 'move';
-      });
+    // Touch support for dragging
+    colorBoard.addEventListener('touchstart', (e) => {
+      if (!dragEnabled) return;
+      const touch = e.touches[0];
+      offsetX = touch.clientX - colorBoard.offsetLeft;
+      offsetY = touch.clientY - colorBoard.offsetTop;
+      e.preventDefault();
+    });
+    colorBoard.addEventListener('touchmove', (e) => {
+      if (!dragEnabled) return;
+      const touch = e.touches[0];
+      colorBoard.style.left = (touch.clientX - offsetX) + 'px';
+      colorBoard.style.top = (touch.clientY - offsetY) + 'px';
+      e.preventDefault();
+    });
     
-      // Touch support for mobile devices
-      el.addEventListener('touchstart', function(e) {
-        isMouseDown = true;
-        const touch = e.touches[0];
-        offsetX = touch.clientX - el.offsetLeft;
-        offsetY = touch.clientY - el.offsetTop;
-      });
-      el.addEventListener('touchmove', function(e) {
-        if (!isMouseDown) return;
-        const touch = e.touches[0];
-        el.style.left = (touch.clientX - offsetX) + 'px';
-        el.style.top = (touch.clientY - offsetY) + 'px';
-        e.preventDefault();
-      });
-      el.addEventListener('touchend', function() {
-        isMouseDown = false;
-      });
-    }
-    
-    // Initialize draggable color board
-    makeDraggable(colorBoard);
+    // Initialize the draggable board's position (if desired)
+    colorBoard.style.position = "absolute";
+    colorBoard.style.left = "20px";
+    colorBoard.style.top = "20px";
     
   </script>
 </body>

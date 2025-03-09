@@ -55,21 +55,21 @@
       background: #C97E9C;
       color: #2C2C2C;
     }
-    /* Draggable Color Board styling */
+    /* Draggable Color Board */
     #colorBoard {
       position: absolute;
       top: 20px;
       left: 20px;
-      width: 220px;
-      background: rgba(0, 0, 0, 0.8);
+      width: 240px;
+      background: rgba(0,0,0,0.8);
       padding: 15px;
       border: 2px solid #FFC107;
       border-radius: 10px;
       z-index: 1000;
-      /* Initially fixed (not draggable) */
+      /* Initially fixed */
       cursor: default;
     }
-    #colorBoard .drag-toggle {
+    #colorBoard .toggle-drag {
       background: #4A4A4A;
       border: 1px solid #FFC107;
       border-radius: 5px;
@@ -125,7 +125,7 @@
   
   <!-- Draggable Color Board -->
   <div id="colorBoard">
-    <div id="dragToggle" class="drag-toggle">Enable Drag</div>
+    <div id="toggleDrag" class="toggle-drag">Enable Drag</div>
     <div id="currentColorContainer">
       <div id="currentColorDisplay"></div>
       <div id="currentLabel">Current</div>
@@ -149,22 +149,20 @@
     const backBtn = document.getElementById('backBtn');
     
     const colorBoard = document.getElementById('colorBoard');
-    const dragToggle = document.getElementById('dragToggle');
+    const toggleDrag = document.getElementById('toggleDrag');
     const currentColorDisplay = document.getElementById('currentColorDisplay');
     const recentColorsBoard = document.getElementById('recentColorsBoard');
     
     let currentColor = colorPicker.value;
     let recentColors = [];
     let dragEnabled = false;
-    let dragOffsetX = 0, dragOffsetY = 0;
     
-    // Update the current color display.
+    /***************** Update Color Board UI *****************/
     function updateCurrentColorDisplay() {
       currentColorDisplay.style.backgroundColor = currentColor;
     }
     updateCurrentColorDisplay();
     
-    // Update recent colors list and render UI (max 5 colors).
     function updateRecentColors(newColor) {
       if (recentColors.length && recentColors[recentColors.length - 1] === newColor) return;
       recentColors = recentColors.filter(c => c !== newColor);
@@ -172,6 +170,7 @@
       if (recentColors.length > 5) recentColors.shift();
       renderRecentColors();
     }
+    
     function renderRecentColors() {
       recentColorsBoard.innerHTML = "";
       recentColors.slice().reverse().forEach(color => {
@@ -186,7 +185,6 @@
       });
     }
     
-    // When the color picker changes, update the current color.
     colorPicker.addEventListener('input', () => {
       currentColor = colorPicker.value;
       updateCurrentColorDisplay();
@@ -228,7 +226,6 @@
       return (color.r < 50 && color.g < 50 && color.b > 200);
     }
     
-    // Optimized scanline flood fill.
     function floodFill(x, y, fillHex) {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const width = imageData.width;
@@ -243,27 +240,31 @@
       while (stack.length > 0) {
         const { x: curX, y: curY } = stack.pop();
         let xLeft = curX;
-        // Move left
-        while (xLeft >= 0 && colorMatch(getPixel(imageData, xLeft, curY), targetColor, tolerance) && !isBoundary(getPixel(imageData, xLeft, curY))) {
+        while (xLeft >= 0 &&
+               colorMatch(getPixel(imageData, xLeft, curY), targetColor, tolerance) &&
+               !isBoundary(getPixel(imageData, xLeft, curY))) {
           xLeft--;
         }
         xLeft++;
         let xRight = curX;
-        // Move right
-        while (xRight < width && colorMatch(getPixel(imageData, xRight, curY), targetColor, tolerance) && !isBoundary(getPixel(imageData, xRight, curY))) {
+        while (xRight < width &&
+               colorMatch(getPixel(imageData, xRight, curY), targetColor, tolerance) &&
+               !isBoundary(getPixel(imageData, xRight, curY))) {
           xRight++;
         }
         xRight--;
-        // Fill scanline
         for (let i = xLeft; i <= xRight; i++) {
           setPixel(imageData, i, curY, fillColor);
         }
-        // Check above and below scanline
         for (let i = xLeft; i <= xRight; i++) {
-          if (curY > 0 && colorMatch(getPixel(imageData, i, curY - 1), targetColor, tolerance) && !isBoundary(getPixel(imageData, i, curY - 1))) {
+          if (curY > 0 &&
+              colorMatch(getPixel(imageData, i, curY - 1), targetColor, tolerance) &&
+              !isBoundary(getPixel(imageData, i, curY - 1))) {
             stack.push({ x: i, y: curY - 1 });
           }
-          if (curY < height - 1 && colorMatch(getPixel(imageData, i, curY + 1), targetColor, tolerance) && !isBoundary(getPixel(imageData, i, curY + 1))) {
+          if (curY < height - 1 &&
+              colorMatch(getPixel(imageData, i, curY + 1), targetColor, tolerance) &&
+              !isBoundary(getPixel(imageData, i, curY + 1))) {
             stack.push({ x: i, y: curY + 1 });
           }
         }
@@ -290,7 +291,7 @@
       updateRecentColors(currentColor);
     });
     
-    /***************** Download Function (Desktop Only, Fallback Download) *****************/
+    /***************** Download Function (Desktop Only) *****************/
     function downloadImage() {
       canvas.toBlob(blob => {
         const url = URL.createObjectURL(blob);
@@ -303,28 +304,16 @@
         URL.revokeObjectURL(url);
       }, 'image/png', 1.0);
     }
+    
     downloadBtn.addEventListener('click', downloadImage);
     
     /***************** Back to Homepage Button *****************/
     backBtn.addEventListener('click', () => {
-      window.location.href = "index.html"; // Change as needed
+      window.location.href = "index.html"; // Change as needed.
     });
     
-    /***************** Draggable Color Board with Toggle Drag (Using Pointer Events) *****************/
-    function enableDragging(el) {
-      el.addEventListener('pointerdown', pointerDownHandler);
-      el.addEventListener('pointermove', pointerMoveHandler);
-      el.addEventListener('pointerup', pointerUpHandler);
-      el.addEventListener('pointercancel', pointerUpHandler);
-    }
-    
-    function disableDragging(el) {
-      el.removeEventListener('pointerdown', pointerDownHandler);
-      el.removeEventListener('pointermove', pointerMoveHandler);
-      el.removeEventListener('pointerup', pointerUpHandler);
-      el.removeEventListener('pointercancel', pointerUpHandler);
-    }
-    
+    /***************** Draggable Color Board with Fix/Unfix Toggle *****************/
+    // Using pointer events for smooth dragging.
     let isDragging = false;
     let dragStartX = 0, dragStartY = 0;
     let boardStartLeft = 0, boardStartTop = 0;
@@ -352,19 +341,19 @@
       colorBoard.releasePointerCapture(e.pointerId);
     }
     
-    // Toggle drag mode when dragToggle is clicked.
-    dragToggle.addEventListener('click', () => {
+    colorBoard.addEventListener('pointerdown', pointerDownHandler);
+    colorBoard.addEventListener('pointermove', pointerMoveHandler);
+    colorBoard.addEventListener('pointerup', pointerUpHandler);
+    colorBoard.addEventListener('pointercancel', pointerUpHandler);
+    
+    // Toggle drag mode with the toggle button.
+    toggleDrag.addEventListener('click', () => {
       dragEnabled = !dragEnabled;
-      dragToggle.textContent = dragEnabled ? "Disable Drag" : "Enable Drag";
+      toggleDrag.textContent = dragEnabled ? "Disable Drag" : "Enable Drag";
       colorBoard.style.cursor = dragEnabled ? "move" : "default";
-      if (dragEnabled) {
-        enableDragging(colorBoard);
-      } else {
-        disableDragging(colorBoard);
-      }
     });
     
-    // Initialize color board position
+    // Set initial position for the color board.
     colorBoard.style.position = "absolute";
     colorBoard.style.left = "20px";
     colorBoard.style.top = "20px";

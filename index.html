@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Flood Fill – Automatic Color By Number</title>
+  <title>Interactive Flood Fill with Custom Boundary Color</title>
   <style>
     /* Overall styling */
     body {
@@ -39,8 +39,19 @@
     .controls {
       margin-top: 20px;
     }
+    .controls label {
+      font-weight: bold;
+    }
+    .controls input[type="color"] {
+      width: 40px;
+      height: 40px;
+      border: none;
+      cursor: pointer;
+      vertical-align: middle;
+      transition: background-color 0.1s ease;
+    }
     .btn {
-      margin: 10px 5px;
+      margin-top: 20px;
       padding: 10px 20px;
       font-size: 1rem;
       font-weight: bold;
@@ -50,234 +61,58 @@
       color: #fff;
       cursor: pointer;
       text-decoration: none;
+      display: inline-block;
     }
     .btn:hover {
       background: #C97E9C;
       color: #2C2C2C;
     }
-    /* Mobile controls (native color pickers) */
-    #mobileControls {
-      margin-top: 10px;
-    }
-    #mobileControls label {
-      font-weight: bold;
-    }
-    #mobileControls input[type="color"] {
-      width: 40px;
-      height: 40px;
-      border: none;
-      cursor: pointer;
-      vertical-align: middle;
-    }
-    /* Desktop: Draggable Color Board */
-    #colorBoard {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      width: 240px;
-      background: rgba(0,0,0,0.8);
-      padding: 15px;
-      border: 2px solid #FFC107;
-      border-radius: 10px;
-      z-index: 1000;
-      cursor: default;
-    }
-    #colorBoard .toggle-drag {
-      background: #4A4A4A;
-      border: 1px solid #FFC107;
-      border-radius: 5px;
-      padding: 5px;
-      margin-bottom: 10px;
-      font-size: 0.9rem;
-      cursor: pointer;
-      user-select: none;
-    }
-    #currentColorContainer {
-      margin-bottom: 10px;
-    }
-    #currentColorDisplay {
-      display: inline-block;
-      width: 60px;
-      height: 60px;
-      border: 4px solid #fff;
-      border-radius: 8px;
-      vertical-align: middle;
-    }
-    #currentLabel {
-      display: block;
-      margin-top: 5px;
-      font-size: 0.9rem;
-    }
-    .recent-colors {
-      margin-top: 10px;
-    }
-    .recent-colors span {
-      display: inline-block;
-      width: 50px;
-      height: 50px;
-      margin: 0 5px;
-      border: 2px solid #fff;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-     #colorPickerContainer {
-  margin-top: 10px;
-}
-#boundaryColorPicker {
-  width: 40px;
-  height: 40px;
-  border: none;
-  cursor: pointer;
-}
-
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Flood Fill – Automatic Color By Number</h1>
+    <h1>Interactive Flood Fill</h1>
     <canvas id="canvas"></canvas>
-    <div class="controls" id="mobileControls">
+    <div class="controls">
       <label for="colorPicker">Fill Color:</label>
       <input type="color" id="colorPicker" value="#FF0000">
       &nbsp;&nbsp;
       <label for="boundaryColorPicker">Boundary Color:</label>
       <input type="color" id="boundaryColorPicker" value="#0000FF">
       <br>
-      <button id="fillAllBtn" class="btn">Fill All Regions</button>
       <button id="downloadBtn" class="btn">Download</button>
       <button id="backBtn" class="btn">Back to Homepage</button>
     </div>
-    <p>On desktop, use the draggable color board to choose colors and fill all regions at once.</p>
-  </div>
-  
-  <!-- Desktop: Draggable Color Board (hidden on mobile) -->
-  <div id="colorBoard">
-    <div id="toggleDrag" class="toggle-drag">Enable Drag</div>
-    <div id="currentColorContainer">
-      <div id="currentColorDisplay"></div>
-      <div id="currentLabel">Fill Color</div>
-    </div>
-    <div id="colorPickerContainer">
-  <label for="boundaryColorPicker">Boundary Color:</label>
-  <input type="color" id="boundaryColorPicker" value="#0000FF">
-</div>
-    <div class="recent-colors" id="recentColorsBoard">
-      <!-- Last five used colors will appear here -->
-    </div>
-    <button id="fillAllBtnDesktop" class="btn" style="margin-top:10px;">Fill All Regions</button>
+    <p>Click on a region (avoid blue boundaries) to fill it with the selected color.<br>
+    Changing the boundary color will update all boundary pixels automatically.</p>
   </div>
   
   <script>
-    /***************** Global Variables *****************/
+    // --- Global Variables ---
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = true;
-    if (ctx.imageSmoothingQuality) {
-      ctx.imageSmoothingQuality = "high";
-    }
+    if (ctx.imageSmoothingQuality) { ctx.imageSmoothingQuality = "high"; }
     
+    const colorPicker = document.getElementById('colorPicker');
+    const boundaryColorPicker = document.getElementById('boundaryColorPicker');
     const downloadBtn = document.getElementById('downloadBtn');
     const backBtn = document.getElementById('backBtn');
-    const fillAllBtnMobile = document.getElementById('fillAllBtn');
-    const fillAllBtnDesktop = document.getElementById('fillAllBtnDesktop');
     
-    // Mobile controls
-    const mobileControls = document.getElementById('mobileControls');
-    const mobileColorPicker = document.getElementById('colorPicker');
-    const mobileBoundaryColorPicker = document.getElementById('boundaryColorPicker');
+    // Global color variables.
+    let currentColor = colorPicker.value;
+    let boundaryColor = boundaryColorPicker.value;
     
-    // Desktop draggable board
-    const colorBoard = document.getElementById('colorBoard');
-    const toggleDrag = document.getElementById('toggleDrag');
-    const currentColorDisplay = document.getElementById('currentColorDisplay');
-    const boundaryColorDisplay = document.getElementById('boundaryColorDisplay');
-    const recentColorsBoard = document.getElementById('recentColorsBoard');
-    
-    // Initial colors
-    let currentColor = mobileColorPicker ? mobileColorPicker.value : "#FF0000";
-    let boundaryColor = mobileBoundaryColorPicker ? mobileBoundaryColorPicker.value : "#0000FF";
-    let recentColors = [];
-    let dragEnabled = false;
-    
-    // Detect mobile device.
-    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    
-    // Conditional UI: Mobile shows native controls; Desktop shows the draggable board.
-    document.addEventListener("DOMContentLoaded", () => {
-      if (isMobile) {
-        mobileControls.style.display = "block";
-        colorBoard.style.display = "none";
-      } else {
-        mobileControls.style.display = "none";
-        colorBoard.style.display = "block";
-      }
+    // --- Event Listeners for Color Pickers ---
+    colorPicker.addEventListener('input', () => {
+      currentColor = colorPicker.value;
+    });
+    boundaryColorPicker.addEventListener('input', () => {
+      boundaryColor = boundaryColorPicker.value;
+      replaceBoundaryColor(boundaryColor);
     });
     
-    // Update color displays on desktop board.
-    function updateCurrentColorDisplay() {
-      currentColorDisplay.style.backgroundColor = currentColor;
-    }
-    function updateBoundaryColorDisplay() {
-      boundaryColorDisplay.style.backgroundColor = boundaryColor;
-    }
-    updateCurrentColorDisplay();
-    updateBoundaryColorDisplay();
-    
-    // Update recent colors (max 5).
-    function updateRecentColors(newColor) {
-      if (recentColors.length && recentColors[recentColors.length - 1] === newColor) return;
-      recentColors = recentColors.filter(c => c !== newColor);
-      recentColors.push(newColor);
-      if (recentColors.length > 5) recentColors.shift();
-      renderRecentColors();
-    }
-    function renderRecentColors() {
-      recentColorsBoard.innerHTML = "";
-      recentColors.slice().reverse().forEach(color => {
-        const span = document.createElement('span');
-        span.style.backgroundColor = color;
-        span.addEventListener('click', () => {
-          currentColor = color;
-          if (isMobile) { mobileColorPicker.value = color; }
-          updateCurrentColorDisplay();
-        });
-        recentColorsBoard.appendChild(span);
-      });
-    }
-    
-    // Mobile pickers update colors.
-    if (mobileColorPicker) {
-      mobileColorPicker.addEventListener('input', () => {
-        currentColor = mobileColorPicker.value;
-        updateCurrentColorDisplay();
-      });
-    }
-    if (mobileBoundaryColorPicker) {
-      mobileBoundaryColorPicker.addEventListener('input', () => {
-        boundaryColor = mobileBoundaryColorPicker.value;
-        replaceBoundaryColor(boundaryColor);
-        updateBoundaryColorDisplay();
-      });
-    }
-    
-    // For desktop, allow double-click on swatches to input a hex code.
-    currentColorDisplay.addEventListener('dblclick', () => {
-      let newColor = prompt("Enter new fill color hex code (e.g., #FF0000):", currentColor);
-      if (newColor) {
-        currentColor = newColor;
-        updateCurrentColorDisplay();
-      }
-    });
-    boundaryColorDisplay.addEventListener('dblclick', () => {
-      let newColor = prompt("Enter new boundary color hex code (e.g., #0000FF):", boundaryColor);
-      if (newColor) {
-        boundaryColor = newColor;
-        replaceBoundaryColor(boundaryColor);
-        updateBoundaryColorDisplay();
-      }
-    });
-    
-    /***************** Image Loading *****************/
+    // --- Load Image ---
     const img = new Image();
     img.crossOrigin = "Anonymous";
     img.src = "own.jpeg";
@@ -287,13 +122,12 @@
       ctx.drawImage(img, 0, 0);
     };
     
-    /***************** Helper Functions *****************/
+    // --- Helper Functions ---
     function getPixel(imageData, x, y) {
       const index = (y * imageData.width + x) * 4;
       const d = imageData.data;
       return { r: d[index], g: d[index+1], b: d[index+2], a: d[index+3] };
     }
-    
     function setPixel(imageData, x, y, color) {
       const index = (y * imageData.width + x) * 4;
       const d = imageData.data;
@@ -302,80 +136,45 @@
       d[index+2] = color.b;
       d[index+3] = 255;
     }
-    
     function hexToRgb(hex) {
       hex = hex.replace(/^#/, '');
       const bigint = parseInt(hex, 16);
       return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255, a: 255 };
     }
-    
     function colorMatch(c1, c2, tolerance) {
       return Math.abs(c1.r - c2.r) <= tolerance &&
              Math.abs(c1.g - c2.g) <= tolerance &&
              Math.abs(c1.b - c2.b) <= tolerance;
     }
     
-const boundaryColorPicker = document.getElementById('boundaryColorPicker');
-let boundaryColor = boundaryColorPicker.value;
-
-boundaryColorPicker.addEventListener('input', () => {
-  boundaryColor = boundaryColorPicker.value;
-  replaceBoundaryColor(boundaryColor);
-});
-
-// Convert hex to RGB object.
-function hexToRgb(hex) {
-  hex = hex.replace(/^#/, '');
-  const bigint = parseInt(hex, 16);
-  return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
-}
-
-// Get pixel from imageData.
-function getPixel(imageData, x, y) {
-  const index = (y * imageData.width + x) * 4;
-  const d = imageData.data;
-  return { r: d[index], g: d[index + 1], b: d[index + 2], a: d[index + 3] };
-}
-
-// Set pixel in imageData.
-function setPixel(imageData, x, y, color) {
-  const index = (y * imageData.width + x) * 4;
-  const d = imageData.data;
-  d[index] = color.r;
-  d[index + 1] = color.g;
-  d[index + 2] = color.b;
-  d[index + 3] = 255;
-}
-
-// Check if pixel is "boundary" using a tolerance.
-function isBoundary(pixel) {
-  const boundaryRGB = hexToRgb(boundaryColor);
-  const tolerance = 20; // Increase tolerance to catch near-blue pixels.
-  return Math.abs(pixel.r - 0) <= tolerance &&
-         Math.abs(pixel.g - 0) <= tolerance &&
-         Math.abs(pixel.b - 255) <= tolerance;
-}
-
-// Replace all boundary pixels with the new boundary color.
-function replaceBoundaryColor(newColor) {
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const width = imageData.width;
-  const height = imageData.height;
-  const newBoundary = hexToRgb(newColor);
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const pixel = getPixel(imageData, x, y);
-      if (isBoundary(pixel)) {
-        setPixel(imageData, x, y, newBoundary);
-      }
+    // --- Boundary Check ---
+    // We use a tolerance so that even near-blue pixels are caught.
+    function isBoundary(color) {
+      const target = hexToRgb(boundaryColor);
+      const tol = 20; // tolerance value (adjust as needed)
+      return Math.abs(color.r - target.r) <= tol &&
+             Math.abs(color.g - target.g) <= tol &&
+             Math.abs(color.b - target.b) <= tol;
     }
-  }
-  ctx.putImageData(imageData, 0, 0);
-}
-    /***************** Optimized Scanline Flood Fill *****************/
+    
+    // --- Replace All Boundary Pixels ---
+    function replaceBoundaryColor(newColor) {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const width = imageData.width;
+      const height = imageData.height;
+      const newBoundary = hexToRgb(newColor);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const pixel = getPixel(imageData, x, y);
+          if (isBoundary(pixel)) {
+            setPixel(imageData, x, y, newBoundary);
+          }
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+    
+    // --- Optimized Scanline Flood Fill ---
     function floodFill(x, y, fillHex) {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const width = imageData.width;
@@ -390,16 +189,20 @@ function replaceBoundaryColor(newColor) {
       while (stack.length > 0) {
         const { x: curX, y: curY } = stack.pop();
         let xLeft = curX;
-        while (xLeft >= 0 &&
-               colorMatch(getPixel(imageData, xLeft, curY), targetColor, tolerance) &&
-               !isBoundary(getPixel(imageData, xLeft, curY))) {
+        while (
+          xLeft >= 0 &&
+          colorMatch(getPixel(imageData, xLeft, curY), targetColor, tolerance) &&
+          !isBoundary(getPixel(imageData, xLeft, curY))
+        ) {
           xLeft--;
         }
         xLeft++;
         let xRight = curX;
-        while (xRight < width &&
-               colorMatch(getPixel(imageData, xRight, curY), targetColor, tolerance) &&
-               !isBoundary(getPixel(imageData, xRight, curY))) {
+        while (
+          xRight < width &&
+          colorMatch(getPixel(imageData, xRight, curY), targetColor, tolerance) &&
+          !isBoundary(getPixel(imageData, xRight, curY))
+        ) {
           xRight++;
         }
         xRight--;
@@ -418,44 +221,7 @@ function replaceBoundaryColor(newColor) {
       ctx.putImageData(imageData, 0, 0);
     }
     
-    /***************** Fill All Regions Function *****************/
-    // This function iterates through every pixel of the canvas.
-    // If the pixel is a boundary, it gets set to the chosen boundary color;
-    // otherwise, it is set to the chosen fill color.
-    function fillAllRegions() {
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const width = imageData.width;
-      const height = imageData.height;
-      const fillColor = hexToRgb(currentColor);
-      const bColor = hexToRgb(boundaryColor);
-      
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const pixel = getPixel(imageData, x, y);
-          if (isBoundary(pixel)) {
-            setPixel(imageData, x, y, bColor);
-          } else {
-            setPixel(imageData, x, y, fillColor);
-          }
-        }
-      }
-      ctx.putImageData(imageData, 0, 0);
-    }
-    
-    // Add event listener for "Fill All Regions" button on desktop.
-    if (!isMobile && fillAllBtnDesktop) {
-      fillAllBtnDesktop.addEventListener('click', () => {
-        fillAllRegions();
-      });
-    }
-    // On mobile, you can use the native "Fill All" button.
-    if (isMobile && fillAllBtnMobile) {
-      fillAllBtnMobile.addEventListener('click', () => {
-        fillAllRegions();
-      });
-    }
-    
-    /***************** Canvas Click Event *****************/
+    // --- Canvas Click Event ---
     canvas.addEventListener('click', function(e) {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
@@ -463,10 +229,9 @@ function replaceBoundaryColor(newColor) {
       const x = Math.floor((e.clientX - rect.left) * scaleX);
       const y = Math.floor((e.clientY - rect.top) * scaleY);
       floodFill(x, y, currentColor);
-      updateRecentColors(currentColor);
     });
     
-    /***************** Download Function (High-Quality PNG) *****************/
+    // --- Download Function (High-Quality PNG) ---
     downloadBtn.addEventListener('click', function() {
       canvas.toBlob(blob => {
         const url = URL.createObjectURL(blob);
@@ -480,56 +245,12 @@ function replaceBoundaryColor(newColor) {
       }, 'image/png', 1.0);
     });
     
-    /***************** Back to Homepage Button *****************/
+    // --- Back to Homepage Button ---
     backBtn.addEventListener('click', () => {
       window.location.href = "index.html"; // Adjust URL as needed.
     });
     
-    /***************** Draggable Color Board (Desktop Only) *****************/
-    let isDragging = false;
-    let dragStartX = 0, dragStartY = 0;
-    let boardStartLeft = 0, boardStartTop = 0;
-    
-    function pointerDownHandler(e) {
-      if (!dragEnabled) return;
-      isDragging = true;
-      dragStartX = e.clientX;
-      dragStartY = e.clientY;
-      boardStartLeft = parseInt(window.getComputedStyle(colorBoard).left, 10);
-      boardStartTop = parseInt(window.getComputedStyle(colorBoard).top, 10);
-      colorBoard.setPointerCapture(e.pointerId);
-    }
-    
-    function pointerMoveHandler(e) {
-      if (!isDragging) return;
-      const deltaX = e.clientX - dragStartX;
-      const deltaY = e.clientY - dragStartY;
-      colorBoard.style.left = (boardStartLeft + deltaX) + "px";
-      colorBoard.style.top = (boardStartTop + deltaY) + "px";
-    }
-    
-    function pointerUpHandler(e) {
-      isDragging = false;
-      colorBoard.releasePointerCapture(e.pointerId);
-    }
-    
-    colorBoard.addEventListener('pointerdown', pointerDownHandler);
-    colorBoard.addEventListener('pointermove', pointerMoveHandler);
-    colorBoard.addEventListener('pointerup', pointerUpHandler);
-    colorBoard.addEventListener('pointercancel', pointerUpHandler);
-    
-    // Toggle drag mode with the toggle button.
-    toggleDrag.addEventListener('click', () => {
-      dragEnabled = !dragEnabled;
-      toggleDrag.textContent = dragEnabled ? "Disable Drag" : "Enable Drag";
-      colorBoard.style.cursor = dragEnabled ? "move" : "default";
-    });
-    
-    // Set initial position for the color board.
-    colorBoard.style.position = "absolute";
-    colorBoard.style.left = "20px";
-    colorBoard.style.top = "20px";
-    
+    /***************** End of Code *****************/
   </script>
 </body>
 </html>

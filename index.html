@@ -78,7 +78,7 @@
       background: #C97E9C;
       color: #2C2C2C;
     }
-    /* NEW: Desktop color grid (hidden by default) */
+    /* Desktop color grid (hidden by default) */
     #desktopColorGrid {
       display: none;
       margin-top: 20px;
@@ -86,7 +86,7 @@
     }
     .color-grid {
       display: grid;
-      grid-template-columns: repeat(8, 30px); /* 8 squares per row */
+      grid-template-columns: repeat(8, 30px);
       grid-gap: 5px;
       justify-content: center;
       margin-top: 10px;
@@ -102,10 +102,10 @@
     .color-square:hover {
       transform: scale(1.1);
     }
-    /* Show/hide "Toggle Color Grid" button only on desktop */
+    /* Hide toggle button on small screens */
     @media (max-width: 767px) {
       #toggleGridBtn {
-        display: none; /* hide on smaller screens */
+        display: none;
       }
     }
   </style>
@@ -132,7 +132,7 @@
       <button id="toggleGridBtn" class="btn">Show/Hide Color Grid</button>
     </div>
     <p>Tap on a region to fill it with the selected color.</p>
-    <!-- NEW: Color Grid (desktop only) -->
+    <!-- Color Grid (desktop only) -->
     <div id="desktopColorGrid">
       <h3>Pick a Color from the Grid</h3>
       <div class="color-grid" id="colorGridSquares">
@@ -183,26 +183,20 @@
       });
     }
 
-    // Global boundary mask: will be an array of booleans for each pixel.
+    // Global boundary mask: stores true for each pixel that was originally boundary.
     let boundaryMask = [];
-
-    // After the image is loaded, we threshold it to create a clear black-and-white version,
-    // then build the boundary mask (true for boundary pixels).
     function thresholdImage() {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
-      const threshold = 128; // adjust threshold if needed
+      const threshold = 128;
       for (let i = 0; i < data.length; i += 4) {
-        // Calculate luminance.
         const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
         if (gray < threshold) {
-          // Dark pixels become pure black.
           data[i] = 0;
           data[i+1] = 0;
           data[i+2] = 0;
           data[i+3] = 255;
         } else {
-          // Otherwise, white.
           data[i] = 255;
           data[i+1] = 255;
           data[i+2] = 255;
@@ -217,7 +211,6 @@
       for (let y = 0; y < canvas.height; y++) {
         for (let x = 0; x < canvas.width; x++) {
           const idx = (y * canvas.width + x) * 4;
-          // In our thresholded image, pure black pixels are boundaries.
           if (imageData.data[idx] === 0 &&
               imageData.data[idx+1] === 0 &&
               imageData.data[idx+2] === 0) {
@@ -264,7 +257,6 @@
       const targetColor = getPixelAt(startX, startY);
       const fillColor = hexToRgb(fillHex);
       const tolerance = 30;
-      // If the target is already the fill color, do nothing.
       if (targetColor.r === fillColor.r &&
           targetColor.g === fillColor.g &&
           targetColor.b === fillColor.b) return;
@@ -272,11 +264,9 @@
       const stack = [{ x: startX, y: startY }];
       while (stack.length) {
         const { x, y } = stack.pop();
-        // If the pixel is outside bounds, skip.
         if (x < 0 || x >= width || y < 0 || y >= height) continue;
         let currentColor = getPixelAt(x, y);
         if (!colorMatch(currentColor, targetColor, tolerance) || isOriginallyBoundary(x, y)) continue;
-        
         let xLeft = x;
         while (xLeft >= 0) {
           currentColor = getPixelAt(xLeft, y);
@@ -284,14 +274,12 @@
           xLeft--;
         }
         xLeft++;
-        
         let xCurrent = xLeft;
         let spanUp = false, spanDown = false;
         while (xCurrent < width) {
           currentColor = getPixelAt(xCurrent, y);
           if (!colorMatch(currentColor, targetColor, tolerance) || isOriginallyBoundary(xCurrent, y)) break;
           setPixelAt(xCurrent, y, fillColor);
-          
           if (y > 0) {
             const pixelAbove = getPixelAt(xCurrent, y - 1);
             if (!spanUp && colorMatch(pixelAbove, targetColor, tolerance) && !isOriginallyBoundary(xCurrent, y - 1)) {
@@ -316,7 +304,7 @@
       ctx.putImageData(imageData, 0, 0);
     }
 
-    // Replace the boundary pixels (according to the stored mask) with a new color.
+    // Replace the boundary pixels (using the stored mask) with a new boundary color.
     function replaceBoundaryColor(newHex) {
       const newBoundary = hexToRgb(newHex);
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -346,7 +334,7 @@
       return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255, a: 255 };
     }
 
-    // Click event on canvas: perform flood fill and update recent colors.
+    // Canvas click event: perform flood fill and update recent colors.
     canvas.addEventListener('click', function(e) {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
@@ -358,29 +346,50 @@
       updateRecentColors(selectedColor);
     });
 
-    // When the boundary color picker changes, update the boundary pixels.
+    // When the boundary color picker changes, update boundary pixels.
     boundaryColorPicker.addEventListener('input', () => {
       const newBoundaryColor = boundaryColorPicker.value;
       replaceBoundaryColor(newBoundaryColor);
     });
 
-    // High-quality download function.
+    // Device detection.
+    const isSmartDevice = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
+    // Download function as in your latest code.
     function downloadImage() {
       canvas.toBlob(blob => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'colored_cat.png';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        if (isSmartDevice && navigator.canShare && navigator.canShare({ files: [new File([blob], 'colored_cat.png', {type: blob.type})] })) {
+          const file = new File([blob], 'colored_cat.png', {type: blob.type});
+          navigator.share({
+            files: [file],
+            title: 'Colored Cat',
+            text: 'Check out my colored cat!'
+          }).catch(err => {
+            console.error('Error sharing:', err);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'colored_cat.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+          });
+        } else {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'colored_cat.png';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
       }, 'image/png', 1.0);
     }
     downloadBtn.addEventListener('click', downloadImage);
 
-    /********** NEW: Color Grid Implementation **********/
-    // A palette arranged in rows.
+    /********** Color Grid Implementation **********/
     const colorPaletteRows = [
       // Row 1: Bright, saturated colors
       ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF", "#FFA500", "#FFC0CB"],

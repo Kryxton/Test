@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Interactive Flood Fill with Custom Boundary & Draggable Color Board</title>
+  <title>Flood Fill – Automatic Color By Number</title>
   <style>
-    /* Overall styling matching your website design */
+    /* Overall styling */
     body {
       background: linear-gradient(to right, #2E1F1C 40%, #FFA726 100%);
       color: #eee;
@@ -40,7 +40,7 @@
       margin-top: 20px;
     }
     .btn {
-      margin: 10px 5px 0 5px;
+      margin: 10px 5px;
       padding: 10px 20px;
       font-size: 1rem;
       font-weight: bold;
@@ -55,7 +55,7 @@
       background: #C97E9C;
       color: #2C2C2C;
     }
-    /* Mobile controls container (shown on mobile only) */
+    /* Mobile controls (native color pickers) */
     #mobileControls {
       margin-top: 10px;
     }
@@ -69,7 +69,7 @@
       cursor: pointer;
       vertical-align: middle;
     }
-    /* Draggable Color Board (Desktop only) */
+    /* Desktop: Draggable Color Board */
     #colorBoard {
       position: absolute;
       top: 20px;
@@ -124,10 +124,8 @@
 </head>
 <body>
   <div class="container">
-    <h1>Interactive Flood Fill for Cat Regions</h1>
+    <h1>Flood Fill – Automatic Color By Number</h1>
     <canvas id="canvas"></canvas>
-    
-    <!-- Mobile controls: shown on mobile only -->
     <div class="controls" id="mobileControls">
       <label for="colorPicker">Fill Color:</label>
       <input type="color" id="colorPicker" value="#FF0000">
@@ -135,11 +133,11 @@
       <label for="boundaryColorPicker">Boundary Color:</label>
       <input type="color" id="boundaryColorPicker" value="#0000FF">
       <br>
+      <button id="fillAllBtn" class="btn">Fill All Regions</button>
       <button id="downloadBtn" class="btn">Download</button>
       <button id="backBtn" class="btn">Back to Homepage</button>
     </div>
-    
-    <p>Click on a region (avoid blue boundaries) to fill it with the selected color.</p>
+    <p>On desktop, use the draggable color board to choose colors and fill all regions at once.</p>
   </div>
   
   <!-- Desktop: Draggable Color Board (hidden on mobile) -->
@@ -147,49 +145,54 @@
     <div id="toggleDrag" class="toggle-drag">Enable Drag</div>
     <div id="currentColorContainer">
       <div id="currentColorDisplay"></div>
-      <div id="currentLabel">Current Fill</div>
+      <div id="currentLabel">Fill Color</div>
     </div>
     <div>
       <label style="font-weight:bold; font-size:0.9rem;">Boundary Color</label>
       <div id="boundaryColorDisplay" style="width:60px; height:60px; border:4px solid #fff; border-radius:8px; margin:0 auto;"></div>
     </div>
     <div class="recent-colors" id="recentColorsBoard">
-      <!-- Recent colors appear here -->
+      <!-- Last five used colors will appear here -->
     </div>
+    <button id="fillAllBtnDesktop" class="btn" style="margin-top:10px;">Fill All Regions</button>
   </div>
   
   <script>
-    /***************** Global Variables and Settings *****************/
+    /***************** Global Variables *****************/
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = true;
-    if (ctx.imageSmoothingQuality) { ctx.imageSmoothingQuality = "high"; }
+    if (ctx.imageSmoothingQuality) {
+      ctx.imageSmoothingQuality = "high";
+    }
     
     const downloadBtn = document.getElementById('downloadBtn');
     const backBtn = document.getElementById('backBtn');
+    const fillAllBtnMobile = document.getElementById('fillAllBtn');
+    const fillAllBtnDesktop = document.getElementById('fillAllBtnDesktop');
     
-    // Mobile color pickers container (visible on mobile)
+    // Mobile controls
     const mobileControls = document.getElementById('mobileControls');
     const mobileColorPicker = document.getElementById('colorPicker');
     const mobileBoundaryColorPicker = document.getElementById('boundaryColorPicker');
     
-    // Desktop draggable color board (visible on desktop)
+    // Desktop draggable board
     const colorBoard = document.getElementById('colorBoard');
     const toggleDrag = document.getElementById('toggleDrag');
     const currentColorDisplay = document.getElementById('currentColorDisplay');
     const boundaryColorDisplay = document.getElementById('boundaryColorDisplay');
     const recentColorsBoard = document.getElementById('recentColorsBoard');
     
-    // Set initial colors
-    let currentColor = "#FF0000";
-    let boundaryColor = "#0000FF";
+    // Initial colors
+    let currentColor = mobileColorPicker ? mobileColorPicker.value : "#FF0000";
+    let boundaryColor = mobileBoundaryColorPicker ? mobileBoundaryColorPicker.value : "#0000FF";
     let recentColors = [];
     let dragEnabled = false;
     
     // Detect mobile device.
     const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     
-    // Conditional UI: On mobile, show mobileControls and hide colorBoard; on desktop, vice versa.
+    // Conditional UI: Mobile shows native controls; Desktop shows the draggable board.
     document.addEventListener("DOMContentLoaded", () => {
       if (isMobile) {
         mobileControls.style.display = "block";
@@ -200,7 +203,7 @@
       }
     });
     
-    // Update displays on desktop color board.
+    // Update color displays on desktop board.
     function updateCurrentColorDisplay() {
       currentColorDisplay.style.backgroundColor = currentColor;
     }
@@ -210,12 +213,12 @@
     updateCurrentColorDisplay();
     updateBoundaryColorDisplay();
     
-    // Update recent colors (max 5)
+    // Update recent colors (max 5).
     function updateRecentColors(newColor) {
       if (recentColors.length && recentColors[recentColors.length - 1] === newColor) return;
       recentColors = recentColors.filter(c => c !== newColor);
       recentColors.push(newColor);
-      if (recentColors.length > 5) { recentColors.shift(); }
+      if (recentColors.length > 5) recentColors.shift();
       renderRecentColors();
     }
     function renderRecentColors() {
@@ -225,37 +228,38 @@
         span.style.backgroundColor = color;
         span.addEventListener('click', () => {
           currentColor = color;
-          if (isMobile) {
-            mobileColorPicker.value = color;
-          }
+          if (isMobile) { mobileColorPicker.value = color; }
           updateCurrentColorDisplay();
         });
         recentColorsBoard.appendChild(span);
       });
     }
     
-    // Mobile pickers update colors
-    mobileColorPicker.addEventListener('input', () => {
-      currentColor = mobileColorPicker.value;
-      updateCurrentColorDisplay();
-    });
-    mobileBoundaryColorPicker.addEventListener('input', () => {
-      boundaryColor = mobileBoundaryColorPicker.value;
-      replaceBoundaryColor(boundaryColor);
-      updateBoundaryColorDisplay();
-    });
+    // Mobile pickers update colors.
+    if (mobileColorPicker) {
+      mobileColorPicker.addEventListener('input', () => {
+        currentColor = mobileColorPicker.value;
+        updateCurrentColorDisplay();
+      });
+    }
+    if (mobileBoundaryColorPicker) {
+      mobileBoundaryColorPicker.addEventListener('input', () => {
+        boundaryColor = mobileBoundaryColorPicker.value;
+        replaceBoundaryColor(boundaryColor);
+        updateBoundaryColorDisplay();
+      });
+    }
     
-    // For desktop, allow double-click on current swatch to prompt for hex code.
+    // For desktop, allow double-click on swatches to input a hex code.
     currentColorDisplay.addEventListener('dblclick', () => {
-      const newColor = prompt("Enter new fill color hex code (e.g., #FF0000):", currentColor);
+      let newColor = prompt("Enter new fill color hex code (e.g., #FF0000):", currentColor);
       if (newColor) {
         currentColor = newColor;
-        if (!isMobile) { /* update desktop board */ }
         updateCurrentColorDisplay();
       }
     });
     boundaryColorDisplay.addEventListener('dblclick', () => {
-      const newColor = prompt("Enter new boundary color hex code (e.g., #0000FF):", boundaryColor);
+      let newColor = prompt("Enter new boundary color hex code (e.g., #0000FF):", boundaryColor);
       if (newColor) {
         boundaryColor = newColor;
         replaceBoundaryColor(boundaryColor);
@@ -301,17 +305,15 @@
              Math.abs(c1.b - c2.b) <= tolerance;
     }
     
-    // Check if a pixel is a boundary pixel (based on current boundaryColor).
+    // In our original image, boundaries are assumed to be pure blue (#0000FF).
+    // We now use the currently selected boundaryColor to determine boundaries.
     function isBoundary(color) {
       const boundaryRGB = hexToRgb(boundaryColor);
-      return (
-        color.r === boundaryRGB.r &&
-        color.g === boundaryRGB.g &&
-        color.b === boundaryRGB.b
-      );
+      return (color.r < 50 && color.g < 50 && color.b > 200) ||
+             (color.r === boundaryRGB.r && color.g === boundaryRGB.g && color.b === boundaryRGB.b);
     }
     
-    // Replace existing boundary pixels with the new boundary color.
+    // Replace all boundary pixels with the new boundary color.
     function replaceBoundaryColor(newColor) {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const width = imageData.width;
@@ -334,7 +336,6 @@
       const height = imageData.height;
       const targetColor = getPixel(imageData, x, y);
       const fillColor = hexToRgb(fillHex);
-      
       if (colorMatch(targetColor, fillColor, 0)) return;
       const tolerance = 30;
       const stack = [];
@@ -371,6 +372,44 @@
       ctx.putImageData(imageData, 0, 0);
     }
     
+    /***************** Fill All Regions Function *****************/
+    // This function iterates through every pixel of the canvas.
+    // If the pixel is a boundary, it gets set to the chosen boundary color;
+    // otherwise, it is set to the chosen fill color.
+    function fillAllRegions() {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const width = imageData.width;
+      const height = imageData.height;
+      const fillColor = hexToRgb(currentColor);
+      const bColor = hexToRgb(boundaryColor);
+      
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const pixel = getPixel(imageData, x, y);
+          if (isBoundary(pixel)) {
+            setPixel(imageData, x, y, bColor);
+          } else {
+            setPixel(imageData, x, y, fillColor);
+          }
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+    
+    // Add event listener for "Fill All Regions" button on desktop.
+    if (!isMobile && fillAllBtnDesktop) {
+      fillAllBtnDesktop.addEventListener('click', () => {
+        fillAllRegions();
+      });
+    }
+    // On mobile, you can use the native "Fill All" button.
+    if (isMobile && fillAllBtnMobile) {
+      fillAllBtnMobile.addEventListener('click', () => {
+        fillAllRegions();
+      });
+    }
+    
+    /***************** Canvas Click Event *****************/
     canvas.addEventListener('click', function(e) {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
@@ -397,11 +436,10 @@
     
     /***************** Back to Homepage Button *****************/
     backBtn.addEventListener('click', () => {
-      window.location.href = "index.html"; // Adjust as needed.
+      window.location.href = "index.html"; // Adjust URL as needed.
     });
     
     /***************** Draggable Color Board (Desktop Only) *****************/
-    // Use pointer events for smooth dragging.
     let isDragging = false;
     let dragStartX = 0, dragStartY = 0;
     let boardStartLeft = 0, boardStartTop = 0;

@@ -78,11 +78,52 @@
       background: #C97E9C;
       color: #2C2C2C;
     }
+    /* NEW: Desktop color grid (hidden by default) */
+    #desktopColorGrid {
+      display: none;
+      margin-top: 20px;
+      text-align: center;
+    }
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 30px); /* 8 squares per row */
+      grid-gap: 5px;
+      justify-content: center;
+      margin-top: 10px;
+    }
+    .color-square {
+      width: 30px;
+      height: 30px;
+      border: 2px solid #fff;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+    .color-square:hover {
+      transform: scale(1.1);
+    }
+    /* Show/hide "Toggle Color Grid" button only on desktop */
+    @media (max-width: 767px) {
+      #toggleGridBtn {
+        display: none; /* hide on smaller screens */
+      }
+    }
+    #colorPickerContainer {
+  margin-top: 10px;
+}
+
+#colorPicker,
+#boundaryColorPicker {
+  width: 40px;
+  height: 40px;
+  border: none;
+  cursor: pointer;
+}
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Interactive Flood Fill for Cat Regions</h1>
+    <h1>Color Merle Yourself</h1>
     <canvas id="canvas"></canvas>
     <div class="controls">
       <label for="colorPicker">Choose Fill Color:</label>
@@ -94,8 +135,24 @@
       <button id="downloadBtn" class="btn">Download</button>
       <!-- Back to Homepage Button -->
       <a href="index.html" class="btn">Back to Homepage</a>
+      <!-- NEW: Toggle button for the color grid (desktop only) -->
+      <button id="toggleGridBtn" class="btn">Show/Hide Color Grid</button>
     </div>
-    <p>Tap on a region (avoid the blue boundaries) to fill it with the selected color.</p>
+    <p>Tap on a region to fill it with the selected color.</p>
+    <!-- NEW: Second color board (grid) -->
+    <div id="desktopColorGrid">
+      <h3>Pick a Color from the Grid</h3>
+      <div class="color-grid" id="colorGridSquares">
+        <!-- We'll populate squares via JS -->
+      </div>
+    </div>
+    <div id="colorPickerContainer">
+  <label for="colorPicker">Fill Color:</label>
+  <input type="color" id="colorPicker" value="#FF0000">
+  
+  <label for="boundaryColorPicker">Boundary Color:</label>
+  <input type="color" id="boundaryColorPicker" value="#0000FF">
+</div>
   </div>
   
   <script>
@@ -110,14 +167,21 @@
     const colorPicker = document.getElementById('colorPicker');
     const recentColorsContainer = document.getElementById('recentColors');
     const downloadBtn = document.getElementById('downloadBtn');
+    const toggleGridBtn = document.getElementById('toggleGridBtn');
+    const desktopColorGrid = document.getElementById('desktopColorGrid');
+    const colorGridSquares = document.getElementById('colorGridSquares');
 
-    // Maintain an array of the last five used colors.
+    // Use a simpler update function that always removes duplicates.
     let recentColors = [];
     function updateRecentColors(newColor) {
-      if (recentColors.length && recentColors[recentColors.length - 1] === newColor) return;
-      recentColors = recentColors.filter(c => c !== newColor);
+      const index = recentColors.indexOf(newColor);
+      if (index !== -1) {
+        recentColors.splice(index, 1);
+      }
       recentColors.push(newColor);
-      if (recentColors.length > 5) recentColors.shift();
+      if (recentColors.length > 5) {
+        recentColors.shift();
+      }
       renderRecentColors();
     }
     function renderRecentColors() {
@@ -142,74 +206,55 @@
       ctx.drawImage(img, 0, 0);
     };
 
-    // Helper: get pixel at (x, y)
-    function getPixel(imageData, x, y) {
-      const index = (y * imageData.width + x) * 4;
-      const d = imageData.data;
-      return { r: d[index], g: d[index+1], b: d[index+2], a: d[index+3] };
-    }
-    // Helper: set pixel at (x, y)
-    function setPixel(imageData, x, y, color) {
-      const index = (y * imageData.width + x) * 4;
-      const d = imageData.data;
-      d[index] = color.r;
-      d[index+1] = color.g;
-      d[index+2] = color.b;
-      d[index+3] = 255;
-    }
-    // Helper: compare colors with tolerance.
-    function colorMatch(c1, c2, tolerance) {
-      return Math.abs(c1.r - c2.r) <= tolerance &&
-             Math.abs(c1.g - c2.g) <= tolerance &&
-             Math.abs(c1.b - c2.b) <= tolerance;
-    }
-    // Helper: determine if a pixel is a blue boundary.
-    function isBoundary(color) {
-      return (color.r < 50 && color.g < 50 && color.b > 200);
-    }
-
-    // Improved scanline flood fill algorithm.
+    // Optimized flood fill (caches imageData and its data array).
     function floodFill(startX, startY, fillHex) {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const width = imageData.width;
       const height = imageData.height;
-      const targetColor = getPixel(imageData, startX, startY);
+      const data = imageData.data;
+      const getPixelAt = (x, y) => {
+        const i = (y * width + x) * 4;
+        return { r: data[i], g: data[i + 1], b: data[i + 2], a: data[i + 3] };
+      };
+      const setPixelAt = (x, y, color) => {
+        const i = (y * width + x) * 4;
+        data[i] = color.r;
+        data[i + 1] = color.g;
+        data[i + 2] = color.b;
+        data[i + 3] = 255;
+      };
+      const targetColor = getPixelAt(startX, startY);
       const fillColor = hexToRgb(fillHex);
       const tolerance = 30;
       
-      // If the target color is already the fill color, do nothing.
-      if (colorMatch(targetColor, fillColor, 0)) return;
+      // If target is already the fill color, return.
+      if (targetColor.r === fillColor.r &&
+          targetColor.g === fillColor.g &&
+          targetColor.b === fillColor.b) return;
       
-      const stack = [];
-      stack.push({ x: startX, y: startY });
-      
+      const stack = [{ x: startX, y: startY }];
       while (stack.length) {
         const { x, y } = stack.pop();
-        let currentColor = getPixel(imageData, x, y);
-        // Skip if the current pixel doesn't match the target or is a boundary.
+        let currentColor = getPixelAt(x, y);
         if (!colorMatch(currentColor, targetColor, tolerance) || isBoundary(currentColor)) continue;
         
-        // Move left to find the start of the scanline.
         let xLeft = x;
         while (xLeft >= 0) {
-          currentColor = getPixel(imageData, xLeft, y);
+          currentColor = getPixelAt(xLeft, y);
           if (!colorMatch(currentColor, targetColor, tolerance) || isBoundary(currentColor)) break;
           xLeft--;
         }
         xLeft++;
         
-        // Process the scanline.
-        let spanUp = false;
-        let spanDown = false;
+        let spanUp = false, spanDown = false;
         while (xLeft < width) {
-          currentColor = getPixel(imageData, xLeft, y);
+          currentColor = getPixelAt(xLeft, y);
           if (!colorMatch(currentColor, targetColor, tolerance) || isBoundary(currentColor)) break;
           
-          setPixel(imageData, xLeft, y, fillColor);
+          setPixelAt(xLeft, y, fillColor);
           
-          // Check the pixel above.
           if (y > 0) {
-            let pixelAbove = getPixel(imageData, xLeft, y - 1);
+            let pixelAbove = getPixelAt(xLeft, y - 1);
             if (!spanUp && colorMatch(pixelAbove, targetColor, tolerance) && !isBoundary(pixelAbove)) {
               stack.push({ x: xLeft, y: y - 1 });
               spanUp = true;
@@ -217,9 +262,8 @@
               spanUp = false;
             }
           }
-          // Check the pixel below.
           if (y < height - 1) {
-            let pixelBelow = getPixel(imageData, xLeft, y + 1);
+            let pixelBelow = getPixelAt(xLeft, y + 1);
             if (!spanDown && colorMatch(pixelBelow, targetColor, tolerance) && !isBoundary(pixelBelow)) {
               stack.push({ x: xLeft, y: y + 1 });
               spanDown = true;
@@ -233,7 +277,15 @@
       ctx.putImageData(imageData, 0, 0);
     }
 
-    // Convert hex string to an RGB object.
+    // Helper functions.
+    function colorMatch(c1, c2, tolerance) {
+      return Math.abs(c1.r - c2.r) <= tolerance &&
+             Math.abs(c1.g - c2.g) <= tolerance &&
+             Math.abs(c1.b - c2.b) <= tolerance;
+    }
+    function isBoundary(color) {
+      return (color.r < 50 && color.g < 50 && color.b > 200);
+    }
     function hexToRgb(hex) {
       hex = hex.replace(/^#/, '');
       const bigint = parseInt(hex, 16);
@@ -243,7 +295,7 @@
       return { r, g, b, a: 255 };
     }
 
-    // Add click event listener to canvas.
+    // Click event on canvas.
     canvas.addEventListener('click', function(e) {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
@@ -255,10 +307,10 @@
       updateRecentColors(selectedColor);
     });
 
-    // Device detection: smart device if touch-enabled.
+    // Device detection.
     const isSmartDevice = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 
-    // Download function: on smart devices, use share if available; otherwise, download.
+    // Download function.
     function downloadImage() {
       canvas.toBlob(blob => {
         if (isSmartDevice && navigator.canShare && navigator.canShare({ files: [new File([blob], 'colored_cat.png', {type: blob.type})] })) {
@@ -269,7 +321,6 @@
             text: 'Check out my colored cat!'
           }).catch(err => {
             console.error('Error sharing:', err);
-            // Fallback to download if sharing fails.
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -280,7 +331,6 @@
             URL.revokeObjectURL(url);
           });
         } else {
-          // Desktop (or fallback): only download.
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
@@ -294,6 +344,92 @@
     }
     
     downloadBtn.addEventListener('click', downloadImage);
+
+    /********** NEW: Color Grid Implementation **********/
+    // New palette with more varied brightness/darkness.
+    const colorPaletteRows = [
+      // Row 1: Bright, saturated colors
+      ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF", "#FFA500", "#FFC0CB"],
+      // Row 2: Dark, saturated colors
+      ["#8B0000", "#006400", "#00008B", "#808000", "#8B008B", "#008B8B", "#FF8C00", "#DA70D6"],
+      // Row 3: Light, pastel colors
+      ["#FFB6C1", "#ADD8E6", "#90EE90", "#FFFFE0", "#E6E6FA", "#FFE4E1", "#F5DEB3", "#FFFACD"],
+      // Row 4: Neutrals and grays
+      ["#000000", "#2F4F4F", "#696969", "#808080", "#A9A9A9", "#C0C0C0", "#D3D3D3", "#FFFFFF"],
+      // Row 5: Additional unique hues
+      ["#FF1493", "#00CED1", "#FFD700", "#7CFC00", "#BA55D3", "#FF7F50", "#40E0D0", "#ADFF2F"]
+    ];
+    
+    function createDesktopColorGrid() {
+      colorGridSquares.innerHTML = ""; // clear any existing squares
+      colorPaletteRows.forEach(row => {
+        row.forEach(color => {
+          const square = document.createElement('div');
+          square.className = 'color-square';
+          square.style.backgroundColor = color;
+          square.addEventListener('click', () => {
+            colorPicker.value = color; // update the color picker
+            updateRecentColors(color); // update recent colors (no duplicates)
+          });
+          colorGridSquares.appendChild(square);
+        });
+      });
+    }
+    createDesktopColorGrid();
+
+    // Toggle the grid’s visibility on desktop and scroll to it when shown.
+    let gridVisible = false;
+    toggleGridBtn.addEventListener('click', () => {
+      gridVisible = !gridVisible;
+      if (gridVisible) {
+        desktopColorGrid.style.display = 'block';
+        desktopColorGrid.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        desktopColorGrid.style.display = 'none';
+      }
+    });
+    const colorPicker = document.getElementById('colorPicker');
+const boundaryColorPicker = document.getElementById('boundaryColorPicker');
+
+let currentColor = colorPicker.value;
+let boundaryColor = boundaryColorPicker.value;
+
+colorPicker.addEventListener('input', () => {
+  currentColor = colorPicker.value;
+});
+
+boundaryColorPicker.addEventListener('input', () => {
+  boundaryColor = boundaryColorPicker.value;
+  replaceBoundaryColor(boundaryColor);
+});
+
+function hexToRgb(hex) {
+  hex = hex.replace(/^#/, '');
+  const bigint = parseInt(hex, 16);
+  return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+}
+
+function isBoundary(color) {
+  const boundaryRGB = hexToRgb(boundaryColor);
+  return (
+    color.r === boundaryRGB.r &&
+    color.g === boundaryRGB.g &&
+    color.b === boundaryRGB.b
+  );
+}
+
+function replaceBoundaryColor(newColor) {
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      const pixelColor = getPixel(imageData, x, y);
+      if (isBoundary(pixelColor)) {
+        setPixel(imageData, x, y, hexToRgb(newColor));
+      }
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
   </script>
 </body>
 </html>

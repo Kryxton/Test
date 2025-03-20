@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Interactive Flood Fill (Near-Black Boundaries)</title>
+  <title>Interactive Flood Fill (Thresholded Boundaries)</title>
   <style>
     /* Overall styling */
     body {
@@ -141,7 +141,7 @@
       <button id="backBtnMobile" class="btn">Back to Homepage</button>
     </div>
     
-    <p>Click a region to fill. Lines are near-black, so changing the boundary color updates all near-black pixels.</p>
+    <p>Click a region to fill. Boundaries are detected after thresholding the image.</p>
   </div>
   
   <!-- Desktop color board -->
@@ -192,7 +192,7 @@
     
     // Initial colors (mobile defaults)
     let currentColor = fillColorMobile.value;        // fill color
-    let boundaryColor = boundaryColorMobile.value;   // boundary color
+    let boundaryColor = boundaryColorMobile.value;     // boundary color
     let recentColors = [];
     
     // Detect if device is mobile
@@ -273,7 +273,7 @@
       });
     }
     
-    // Load the image
+    // Load the image and apply thresholding
     const img = new Image();
     img.crossOrigin = "Anonymous";
     img.src = "own.jpeg";
@@ -281,7 +281,33 @@
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
       ctx.drawImage(img, 0, 0);
+      thresholdImage(); // auto-convert to black & white
     };
+    
+    // Threshold the image: dark pixels become pure black; bright pixels become pure white.
+    function thresholdImage() {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      const threshold = 128; // adjust threshold as needed
+      for (let i = 0; i < data.length; i += 4) {
+        // Convert to grayscale using standard luminance formula
+        const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+        if (gray < threshold) {
+          // dark enough becomes black
+          data[i] = 0;
+          data[i+1] = 0;
+          data[i+2] = 0;
+          data[i+3] = 255;
+        } else {
+          // otherwise, make it white
+          data[i] = 255;
+          data[i+1] = 255;
+          data[i+2] = 255;
+          data[i+3] = 255;
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
     
     // Helper: get/set pixel
     function getPixel(imageData, x, y) {
@@ -302,19 +328,13 @@
       const bigint = parseInt(hex, 16);
       return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255, a: 255 };
     }
-    function colorMatch(c1, c2, tol) {
-      return Math.abs(c1.r - c2.r) <= tol &&
-             Math.abs(c1.g - c2.g) <= tol &&
-             Math.abs(c1.b - c2.b) <= tol;
-    }
     
-    // isBoundary: near-black detection
+    // Boundary detection: now that the image is thresholded, a boundary is simply a black pixel.
     function isBoundary(color) {
-      const tolerance = 20; 
-      return (color.r <= tolerance && color.g <= tolerance && color.b <= tolerance);
+      return (color.r === 0 && color.g === 0 && color.b === 0);
     }
     
-    // replace all near-black pixels with new boundary color
+    // Replace all boundary pixels (black) with new boundary color.
     function replaceBoundaryColor(newHex) {
       const newBoundary = hexToRgb(newHex);
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -331,7 +351,7 @@
       ctx.putImageData(imageData, 0, 0);
     }
     
-    // flood fill ignoring boundary pixels
+    // Flood fill ignoring boundary pixels
     function floodFill(x, y, fillHex) {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const w = imageData.width;
@@ -372,6 +392,13 @@
         }
       }
       ctx.putImageData(imageData, 0, 0);
+    }
+    
+    // Compare two colors with a tolerance (for flood fill)
+    function colorMatch(c1, c2, tol) {
+      return Math.abs(c1.r - c2.r) <= tol &&
+             Math.abs(c1.g - c2.g) <= tol &&
+             Math.abs(c1.b - c2.b) <= tol;
     }
     
     // On click, fill the region
